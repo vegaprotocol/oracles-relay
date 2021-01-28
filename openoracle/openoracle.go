@@ -22,16 +22,24 @@ type OracleResponse struct {
 // into and OracleResponse
 // if the unmarshal is successful then the content is verified
 func UnmarshalVerify(payload []byte, address string) (*OracleResponse, error) {
+	oresp, err := Unmarshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	return oresp, Verify(*oresp, address)
+}
+
+func Unmarshal(payload []byte) (*OracleResponse, error) {
 	oresp := OracleResponse{}
 	err := json.Unmarshal(payload, &oresp)
 	if err != nil {
 		return nil, err
 	}
-
-	return &oresp, verify(oresp, address)
+	return &oresp, nil
 }
 
-func verify(oresp OracleResponse, address string) error {
+func Verify(oresp OracleResponse, address string) error {
 	typString, err := abi.NewType("string", "", nil)
 	if err != nil {
 		return err
