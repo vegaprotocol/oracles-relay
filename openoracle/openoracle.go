@@ -27,7 +27,10 @@ func UnmarshalVerify(payload []byte, address string) (*OracleResponse, error) {
 		return nil, err
 	}
 
-	return oresp, Verify(*oresp, address)
+	pk, kv, err := Verify(*oresp)
+	fmt.Printf("%v\n%v\n", pk, kv)
+
+	return oresp, err
 }
 
 func Unmarshal(payload []byte) (*OracleResponse, error) {
@@ -39,15 +42,15 @@ func Unmarshal(payload []byte) (*OracleResponse, error) {
 	return &oresp, nil
 }
 
-func Verify(oresp OracleResponse, address string) error {
+func Verify(oresp OracleResponse) ([]string, map[string]string, error) {
 	typString, err := abi.NewType("string", "", nil)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	typUint64, err := abi.NewType("uint64", "", nil)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	args := abi.Arguments([]abi.Argument{
@@ -71,17 +74,20 @@ func Verify(oresp OracleResponse, address string) error {
 
 	// ensure we have as much signature than messages
 	if len(oresp.Messages) != len(oresp.Signatures) {
-		return fmt.Errorf("got %v signatures, but have %v messages", len(oresp.Signatures), len(oresp.Messages))
+		return nil, nil, fmt.Errorf("got %v signatures, but have %v messages", len(oresp.Signatures), len(oresp.Messages))
 	}
+
+	pubkeys := map[string]struct{}{}
+	keyValues := map[string]string{}
 
 	for i := 0; i < len(oresp.Messages); i++ {
 		sigBytes, err := hex.DecodeString(strings.TrimPrefix(oresp.Signatures[i], "0x"))
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		msgBytes, err := hex.DecodeString(strings.TrimPrefix(oresp.Messages[i], "0x"))
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		hashDecoded := crypto.Keccak256Hash(msgBytes)
 		hashDecodedPadded := accounts.TextHash(hashDecoded.Bytes())
@@ -94,14 +100,16 @@ func Verify(oresp OracleResponse, address string) error {
 
 		sigPublicKeyECDSA, err := crypto.SigToPub(hashDecodedPadded, sigBytes)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		addrHex := crypto.PubkeyToAddress(*sigPublicKeyECDSA).Hex()
 
-		if address != addrHex {
-			return fmt.Errorf("oracle response contains invalid address, expected(%v), got(%v)", address, addrHex)
-		}
+		pubkeys[addrHex] = struct{}{}
+
+		// if address != addrHex {
+		// 	return nil, nil, fmt.Errorf("oracle response contains invalid address, expected(%v), got(%v)", address, addrHex)
+		// }
 
 		// FIXME(jeremy): signature verification seems not to work everytime
 		// but address does...
@@ -115,8 +123,16 @@ func Verify(oresp OracleResponse, address string) error {
 		m := map[string]interface{}{}
 		err = args.UnpackIntoMap(m, msgBytes)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
+
+		keyValues[fmt.Sprintf("%v.%v", m["kind"], m["key"])] = fmt.Sprintf("%v", m["value"])
 	}
-	return nil
+
+	pubkeysSlice := make([]string, 0, len(pubkeys))
+	for k := range pubkeys {
+		pubkeysSlice = append(pubkeysSlice, k)
+	}
+
+	return pubkeysSlice, keyValues, nil
 }
