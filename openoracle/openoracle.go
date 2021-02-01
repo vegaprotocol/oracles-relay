@@ -126,7 +126,8 @@ func Verify(oresp OracleResponse) ([]string, map[string]string, error) {
 			return nil, nil, err
 		}
 
-		keyValues[fmt.Sprintf("%v.%v", m["kind"], m["key"])] = fmt.Sprintf("%v", m["value"])
+		keyValues[fmt.Sprintf("%v.%v.value", m["kind"], m["key"])] = fmt.Sprintf("%v", m["value"])
+		keyValues[fmt.Sprintf("%v.%v.timestamp", m["kind"], m["key"])] = fmt.Sprintf("%v", m["timestamp"])
 	}
 
 	pubkeysSlice := make([]string, 0, len(pubkeys))
