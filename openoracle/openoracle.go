@@ -3,6 +3,7 @@ package openoracle
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -102,23 +103,26 @@ func Verify(oresp OracleResponse) ([]string, map[string]string, error) {
 		if err != nil {
 			return nil, nil, err
 		}
+		if sigPublicKeyECDSA.X == nil {
+			return nil, nil, fmt.Errorf("elliptic unmarshal failed for message %d - Msg: %s - Sig: %s", i, oresp.Messages[i], oresp.Signatures[i])
+		}
 
 		addrHex := crypto.PubkeyToAddress(*sigPublicKeyECDSA).Hex()
 
 		pubkeys[addrHex] = struct{}{}
 
 		// if address != addrHex {
-		// 	return nil, nil, fmt.Errorf("oracle response contains invalid address, expected(%v), got(%v)", address, addrHex)
+		// return nil, nil, fmt.Errorf("oracle response contains invalid address, expected(%v), got(%v)", address, addrHex)
 		// }
 
 		// FIXME(jeremy): signature verification seems not to work everytime
 		// but address does...
-		// signatureNoRecoverID := sigBytes[:len(sigBytes)-1] // remove recovery ID
-		// if !crypto.VerifySignature(
-		// 	crypto.CompressPubkey(sigPublicKeyECDSA),
-		// 	hashDecodedPadded, signatureNoRecoverID) {
-		// 	return errors.New("oracle response contains invalid signature")
-		// }
+		signatureNoRecoverID := sigBytes[:len(sigBytes)-1] // remove recovery ID
+		if !crypto.VerifySignature(
+			crypto.CompressPubkey(sigPublicKeyECDSA),
+			hashDecodedPadded, signatureNoRecoverID) {
+			return nil, nil, errors.New("oracle response contains invalid signature")
+		}
 
 		m := map[string]interface{}{}
 		err = args.UnpackIntoMap(m, msgBytes)
